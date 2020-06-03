@@ -1,0 +1,178 @@
+package views
+
+import (
+	"fmt"
+	"log"
+	"sync"
+
+	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/consumer"
+	"github.com/zerodoctor/homeapi-front/model"
+)
+
+var (
+	treeView *gocui.View
+
+	root = model.NewLabel(
+		"root", "root", true, false, 0, 0, nil,
+	)
+)
+
+// SetTreeView :
+func SetTreeView(g *gocui.Gui, maxX int, maxY int) error {
+	if v, err := g.SetView("tree", 0, 0, maxX/5, (maxY-(maxY/15))-2); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Title = "tree"
+		v.Wrap = false
+		v.Highlight = true
+		v.SelBgColor = gocui.ColorGreen
+		v.SelFgColor = gocui.ColorBlack
+
+		treeView = v
+		//InTreeChan <- NewData(0, 0, false, "", model.EmptyFileFolder())
+	}
+
+	return nil
+}
+
+// currentBuffer :
+//	 could be very large (memory wise) but hopefully user doesn't need to keep every folder open
+// 	 They'll probably will
+var currentBuffer []model.Label
+
+// PrintTreeView :
+func PrintTreeView(g *gocui.Gui, wg *sync.WaitGroup) {
+	defer wg.Done()
+	for data := range InTreeChan {
+		if treeView != nil {
+			if data.File == nil {
+				err := showTreeView(g, data)
+				if err != nil {
+					log.Panicln(err)
+				}
+			} else {
+				InStatusChan <- Logging("Info", "processing file...", true)
+				// Not really sure if we need to send File structure
+			}
+			InStatusChan <- Logging("", "Done!", false)
+		}
+	}
+}
+
+// not sure if we need to send Data struct in here
+func showTreeView(g *gocui.Gui, data Data) error {
+	if len(currentBuffer) <= 0 {
+		InStatusChan <- Logging("Info", "initalizing tree buffer... ", true)
+		currentBuffer = append(currentBuffer, root)
+		printTreeView(g)
+		return nil
+	}
+	if data.Integer >= len(currentBuffer) || data.Integer <= -1 {
+		InStatusChan <- Logging("Error", "index is outside the current tree buffer", true)
+		return nil
+	}
+
+	parent := currentBuffer[data.Integer]
+	if data.Type == "open" || data.Type == "refresh" {
+		return openTreeView(g, parent, data)
+	} else if data.Type == "view" {
+		// might not even need this... we'll see
+	}
+
+	return nil
+
+}
+
+func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
+	parent.Open = !parent.Open
+	currentBuffer[data.Integer] = parent
+
+	if parent.Open {
+		InStatusChan <- Logging("Info", "opening "+parent.Name+"... ", true)
+		if parent.Children == nil || data.Type == "refresh" {
+			InStatusChan <- Logging("Info", "fecthing "+parent.Name+" children... ", true)
+			//InStatusChan <- Logging("Sending Request: " + (time.Now()).String(), true)
+			err := consumer.CheckFolderContent(parent.ID)
+			//InStatusChan <- Logging("Recevice Response: " + (time.Now()).String(), true)
+			if err != nil {
+				InStatusChan <- Logging("Warning", "couldn't fetch "+parent.ID+" from db ", true)
+				return nil
+			}
+
+			reponse := consumer.GetLabelContent(parent.ID)
+			if len(reponse) <= 0 {
+				InStatusChan <- Logging("Info", parent.ID+" is empty", true)
+				InScreenChan <- NewData("open", data.Integer, false, parent.ID, nil)
+				return nil
+			}
+			parent.Children = reponse
+		}
+
+		content := consumer.GetFolderContent(parent.ID)
+		InScreenChan <- NewData("open", data.Integer, false, parent.ID, content)
+
+		count := 0
+		for _, child := range parent.Children {
+			if child.Folder {
+				child.Depth = parent.Depth + 1
+				child.Index = data.Integer + count + 1
+				currentBuffer = model.Insert(currentBuffer, child, child.Index)
+				count++
+			}
+		}
+		currentBuffer[data.Integer] = parent
+		printTreeView(g)
+		updateScreenView(g, parent.Name)
+	} else {
+		InStatusChan <- Logging("Info", "closing "+parent.Name+"... ", true)
+
+		total := 0
+		parent.Index = data.Integer
+		for i := parent.Index + 1; i < len(currentBuffer); i++ {
+			if parent.Depth >= currentBuffer[i].Depth {
+				break
+			}
+			total++
+		}
+		currentBuffer = model.RemoveFrom(currentBuffer, parent.Index+1, parent.Index+total+1)
+		currentBuffer[data.Integer] = parent
+		printTreeView(g)
+	}
+	return nil
+}
+
+// could move this to the screen.go file
+func updateScreenView(g *gocui.Gui, title string) {
+	g.Update(func(g *gocui.Gui) error {
+		screenView, err := g.View("screen")
+		if err == nil {
+			screenView.Title = title
+		}
+		return nil
+	})
+}
+
+func printTreeView(g *gocui.Gui) {
+	g.Update(func(g *gocui.Gui) error {
+		treeView.Clear()
+		var str string
+		for _, label := range currentBuffer {
+			for i := 0; i < label.Depth; i++ {
+				str += "| "
+			}
+			if label.Folder && !label.Open {
+				str += "+ "
+			} else if label.Folder && label.Open {
+				str += "- "
+			} else {
+				str += "  "
+			}
+			str += label.Name + "\n"
+		}
+		fmt.Fprint(treeView, str)
+
+		return nil
+	})
+}
