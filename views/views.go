@@ -43,5 +43,6 @@ func Quit(g *gocui.Gui, v *gocui.View) error {
 	close(InTreeChan)
 	close(InScreenChan)
 	close(InStatusChan)
+
 	return gocui.ErrQuit
 }

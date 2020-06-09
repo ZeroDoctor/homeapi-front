@@ -14,12 +14,12 @@ import (
 )
 
 var (
-	screenView, emptyView *gocui.View
-	x0, y0, x1, y1        int
-	conX, conY            int
-	currentParent 		  int
-	currentParentID		  string
-	currentFolder 		  []model.FileFolder
+	screenView, emptyView, dialogView *gocui.View
+	x0, y0, x1, y1                    int
+	conX, conY                        int
+	currentParent                     int
+	currentParentID                   string
+	currentFolder                     []model.FileFolder
 )
 
 // SetScreenView :
@@ -54,7 +54,7 @@ func SetScreenView(g *gocui.Gui, maxX int, maxY int) error {
 func setTempView(g *gocui.Gui, msg string) error {
 	newX := ((conX / 2) + (x0 / 2)) - 11
 	newY := y1 / 2
-	if v, err := g.SetView("empty", (newX-1), newY-1, newX+20, newY+1); err != nil {
+	if v, err := g.SetView("empty", (newX - 1), newY-1, newX+20, newY+1); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -68,6 +68,11 @@ func setTempView(g *gocui.Gui, msg string) error {
 		emptyView = v
 		g.SetViewOnTop("empty")
 	}
+
+	return nil
+}
+
+func setDialogBox(g *gocui.Gui, title string) error {
 
 	return nil
 }
@@ -104,51 +109,98 @@ func showScreenView(g *gocui.Gui, data Data) error {
 		}
 		currentParent = data.Integer
 		return printScreenView(g, data.File, data.String.(string))
-	} else {
-		if data.Integer <= 0 || data.Integer >= (len(currentFolder)+1)  {
-			InStatusChan <- Logging("Error", "index out of bounds " + strconv.Itoa(data.Integer) + "... ", true)
-			return nil
-		}
-
-		switch data.Type {
-		case "view":
-			return openScreenFile(g, data)
-		case "download":
-			return downloadScreenFile(g, data)
-		case "delete":
-		case "refresh":
-
-		}
 	}
 
-	return nil
-}
-
-func refreshScreenFile(g *gocui.Gui, data Data) error {
-
-
-	return nil
-}
-
-func downloadScreenFile(g *gocui.Gui, data Data) error {
-	file := currentFolder[data.Integer]
-
-	InStatusChan <- Logging("Info", "processing download request...", true)
-	path, err := consumer.DownloadFolder(file)
-	if err != nil {
-		InStatusChan <- Logging("Warning", "Something went wrong my guy ", true)
+	if data.Integer < 0 || data.Integer >= (len(currentFolder)+1) {
+		InStatusChan <- Logging("Error", "index out of bounds "+strconv.Itoa(data.Integer)+"... ", true)
 		return nil
 	}
-	InStatusChan <- Logging("Info", "the file " + file.FullName + " has been downloaded to " + path + " ", true)
-	InTreeChan <- NewData("refresh", currentParent, false, "", nil) // a zip file has been created so lets refresh parent
+
+	switch data.Type {
+	case "view":
+		return openScreenView(g, data.Integer)
+	case "download":
+		return downloadScreenView(g, data.Integer)
+	case "question":
+		return questionScreenView(g, data)
+	case "delete":
+		return deleteScreenView(g, data.Integer)
+	case "refresh":
+		return refreshScreenView(g, data)
+	case "upload":
+		return uploadScreenView(g, data.Integer)
+	case "cancel":
+		return cancelScreenView(g)
+
+	}
 
 	return nil
 }
 
-func openScreenFile(g *gocui.Gui, data Data) error {
-	if currentFolder[data.Integer-1].Dir == 1 {
-		InStatusChan <- Logging("Info", "processing " + strconv.Itoa(currentParent + data.Integer) + "... " , true)
-		InTreeChan <- NewData("open", currentParent + data.Integer, false, "", nil)
+// the reason why this is here and not in status.go because of the currentFolder var
+// status.go can access the var but I like private vars to be accessed in one file instead of the whole folder
+func questionScreenView(g *gocui.Gui, data Data) error {
+	file := currentFolder[data.Integer]
+
+	SetCurrentViewOnTop(g, "status")
+	InStatusChan <- NewData(
+		data.String.(string), data.Integer, true,
+		"are you sure you want to "+data.String.(string)+" "+file.FullName+" (y/n) ",
+		nil,
+	)
+
+	return nil
+}
+
+func cancelScreenView(g *gocui.Gui) error {
+	InStatusChan <- Logging("Info", "cancelling operation... ", true)
+	return nil
+}
+
+func uploadScreenView(g *gocui.Gui, index int) error {
+
+	return nil
+}
+
+func deleteScreenView(g *gocui.Gui, index int) error {
+	file := currentFolder[index]
+
+	InStatusChan <- Logging("Info", "deleting "+file.FullName+"... ", true)
+	result, err := consumer.DeleteFolder(file)
+	if err != nil {
+		return err
+	}
+	InStatusChan <- Logging("Info", result+" ", true)
+	InTreeChan <- NewData("refresh", currentParent, false, "", nil)
+
+	return nil
+}
+
+func refreshScreenView(g *gocui.Gui, data Data) error {
+	return nil
+}
+
+func downloadScreenView(g *gocui.Gui, index int) error {
+	file := currentFolder[index]
+
+	InStatusChan <- Logging("Info", "processing download "+file.ID+"...", true)
+	path, err := consumer.DownloadFolder(file)
+	if err != "" {
+		InStatusChan <- Logging("Warning", "Something went wrong my guy "+err, true)
+		return nil
+	}
+	InStatusChan <- Logging("Info", "the file "+file.FullName+" has been downloaded to "+path+" ", true)
+	if file.Dir == 1 {
+		InTreeChan <- NewData("refresh", currentParent, false, "", nil) // a zip file has been created so lets refresh parent
+	}
+
+	return nil
+}
+
+func openScreenView(g *gocui.Gui, index int) error {
+	if currentFolder[index].Dir == 1 {
+		// InStatusChan <- Logging("Info", "processing " + strconv.Itoa(currentParent + index) + "... " , true)
+		InTreeChan <- NewData("open", currentParent+index, false, "", nil)
 	}
 
 	InStatusChan <- Logging("Info", "can't open a file yet ", true)
@@ -160,7 +212,7 @@ func repeatString(buffer *bytes.Buffer, str string, count int) {
 		InStatusChan <- Logging("Error", "count is too long ", true)
 		return
 	}
-	
+
 	for i := 0; i < count; i++ {
 		buffer.WriteString(str)
 	}
@@ -174,7 +226,7 @@ func countDigits(num int) int {
 }
 
 func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) error {
-	if err := screenView.SetCursor(0,2); err != nil {
+	if err := screenView.SetCursor(0, 2); err != nil {
 		return err
 	}
 	var buffer bytes.Buffer
@@ -182,7 +234,7 @@ func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) err
 	var topBarBuffer bytes.Buffer
 
 	sizeName := 0
-	longestName := 12 // default to 12 spaces
+	longestName := 12   // default to 12 spaces
 	biggestFile := 9999 //  the biggest size of a file also defaults to 4 spaces
 
 	InStatusChan <- Logging("Info", "processing "+parentId+"... ", true)
@@ -206,7 +258,7 @@ func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) err
 		repeatString(&buffer, " ", longestName-len(f.FullName))
 		buffer.WriteString(" |  " + strconv.Itoa(int(f.Dir)))
 		buffer.WriteString("  | " + strconv.Itoa(f.Size))
-		repeatString(&buffer, " ", biggestFile - lengthSize)
+		repeatString(&buffer, " ", biggestFile-lengthSize)
 		buffer.WriteString(" |")
 		repeatString(&buffer, " ", end) // prev: biggestFile - lengthSize
 		buffer.WriteString(" | \n")
@@ -217,11 +269,11 @@ func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) err
 	headBuffer.WriteString(" | Dir | Size")
 	repeatString(&headBuffer, " ", biggestFile-4)
 	headBuffer.WriteString(" |")
-	repeatString(&headBuffer, " ", end) // prev: biggestFile - 4 
+	repeatString(&headBuffer, " ", end) // prev: biggestFile - 4
 	headBuffer.WriteString(" | \n")
 
 	topBarBuffer.WriteString(" + ")
-	repeatString(&topBarBuffer, "-", x1 - x0 - 8) // prev: longestName + biggestFile + 9
+	repeatString(&topBarBuffer, "-", x1-x0-8) // prev: longestName + biggestFile + 9
 	topBarBuffer.WriteString(" + \n")
 
 	g.Update(func(g *gocui.Gui) error {

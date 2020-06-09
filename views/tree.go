@@ -32,6 +32,11 @@ func SetTreeView(g *gocui.Gui, maxX int, maxY int) error {
 
 		treeView = v
 		//InTreeChan <- NewData(0, 0, false, "", model.EmptyFileFolder())
+		if _, err := SetCurrentViewOnTop(g, "tree"); err != nil {
+			return err
+		}
+
+		InTreeChan <- NewData("init", 0, false, "", nil)
 	}
 
 	return nil
@@ -47,14 +52,9 @@ func PrintTreeView(g *gocui.Gui, wg *sync.WaitGroup) {
 	defer wg.Done()
 	for data := range InTreeChan {
 		if treeView != nil {
-			if data.File == nil {
-				err := showTreeView(g, data)
-				if err != nil {
-					log.Panicln(err)
-				}
-			} else {
-				InStatusChan <- Logging("Info", "processing file...", true)
-				// Not really sure if we need to send File structure
+			err := showTreeView(g, data)
+			if err != nil {
+				log.Panicln(err)
 			}
 			InStatusChan <- Logging("", "Done!", false)
 		}
@@ -75,14 +75,57 @@ func showTreeView(g *gocui.Gui, data Data) error {
 	}
 
 	parent := currentBuffer[data.Integer]
-	if data.Type == "open" || data.Type == "refresh" {
+
+	switch data.Type {
+	case "open":
 		return openTreeView(g, parent, data)
-	} else if data.Type == "view" {
-		// might not even need this... we'll see
+	case "refresh":
+		return refreshTreeView(g, parent, data)
+	case "view":
 	}
 
 	return nil
 
+}
+
+func refreshTreeView(g *gocui.Gui, parent model.Label, data Data) error {
+
+	_, t := getFileData(parent, data)
+	if t != 0 {
+		return nil
+	}
+	printTreeView(g)
+
+	if data.Type == "refresh" {
+		content := consumer.GetFolderContent(parent.ID)
+		InScreenChan <- NewData("open", data.Integer, false, parent.ID, content)
+	}
+
+
+	return nil
+}
+
+func getFileData(parent model.Label, data Data) (model.Label, int) {
+	InStatusChan <- Logging("Info", "fecthing "+parent.Name+" children... ", true)
+	//InStatusChan <- Logging("Sending Request: " + (time.Now()).String(), true)
+	err := consumer.CheckFolderContent(parent.ID)
+	//InStatusChan <- Logging("Recevice Response: " + (time.Now()).String(), true)
+	if err != nil {
+		InStatusChan <- Logging("Warning", "couldn't fetch "+parent.ID+" from db ", true)
+		return parent, 1
+	}
+
+	reponse := consumer.GetLabelContent(parent.ID)
+	if len(reponse) <= 0 {
+		InStatusChan <- Logging("Info", parent.ID+" is empty", true)
+		InScreenChan <- NewData("open", data.Integer, false, parent.ID, nil)
+		return parent, 1
+	}
+	parent.Children = reponse
+	currentBuffer[data.Integer] = parent
+
+
+	return parent, 0
 }
 
 func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
@@ -92,22 +135,11 @@ func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
 	if parent.Open {
 		InStatusChan <- Logging("Info", "opening "+parent.Name+"... ", true)
 		if parent.Children == nil || data.Type == "refresh" {
-			InStatusChan <- Logging("Info", "fecthing "+parent.Name+" children... ", true)
-			//InStatusChan <- Logging("Sending Request: " + (time.Now()).String(), true)
-			err := consumer.CheckFolderContent(parent.ID)
-			//InStatusChan <- Logging("Recevice Response: " + (time.Now()).String(), true)
-			if err != nil {
-				InStatusChan <- Logging("Warning", "couldn't fetch "+parent.ID+" from db ", true)
+			result, t := getFileData(parent, data)
+			if t != 0 {
 				return nil
 			}
-
-			reponse := consumer.GetLabelContent(parent.ID)
-			if len(reponse) <= 0 {
-				InStatusChan <- Logging("Info", parent.ID+" is empty", true)
-				InScreenChan <- NewData("open", data.Integer, false, parent.ID, nil)
-				return nil
-			}
-			parent.Children = reponse
+			parent = result
 		}
 
 		content := consumer.GetFolderContent(parent.ID)

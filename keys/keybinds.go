@@ -17,6 +17,8 @@ import (
 	m : 109 -> moves file/folder
 
 	b : 98  -> pops state off of stack
+	y : 121 -> accepts action
+	n : 110 -> cancels action
 
 	h : 104 -> moves cursor left
 	j : 106 -> moves cursor down
@@ -37,7 +39,10 @@ func SetGeneralBindings(g *gocui.Gui) {
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, views.Quit); err != nil { // instead of quit pop folder stack if empty then quit
 		log.Panicln(err)
 	}
-	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, views.NextView); err != nil {
+	if err := g.SetKeybinding("tree", gocui.KeyTab, gocui.ModNone, views.NextView); err != nil {
+		log.Panicln(err)
+	}
+	if err := g.SetKeybinding("screen", gocui.KeyTab, gocui.ModNone, views.NextView); err != nil {
 		log.Panicln(err)
 	}
 	if err := g.SetKeybinding("status", gocui.KeyEnter, gocui.ModNone, InitTree); err != nil {
@@ -52,6 +57,7 @@ func SetGeneralBindings(g *gocui.Gui) {
 	openScreen := NewKey(rune(111), OpenScreenFile)
 	downloadScreen := NewKey(rune(103), DownloadScreenFile)
 	deleteScreen := NewKey(rune(100), DeleteScreenFile)
+	uploadScreen := NewKey(rune(117), UploadScreenFile)
 
 	treeKeys := []KeyOp{
 		up,
@@ -64,6 +70,7 @@ func SetGeneralBindings(g *gocui.Gui) {
 		openScreen,
 		downloadScreen,
 		deleteScreen,
+		uploadScreen,
 	}
 
 	setViewBindings(g, treeKeys, "tree")
