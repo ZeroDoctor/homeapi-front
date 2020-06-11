@@ -101,7 +101,6 @@ func refreshTreeView(g *gocui.Gui, parent model.Label, data Data) error {
 		InScreenChan <- NewData("open", data.Integer, false, parent.ID, content)
 	}
 
-
 	return nil
 }
 
@@ -123,7 +122,6 @@ func getFileData(parent model.Label, data Data) (model.Label, int) {
 	}
 	parent.Children = reponse
 	currentBuffer[data.Integer] = parent
-
 
 	return parent, 0
 }

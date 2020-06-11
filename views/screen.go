@@ -18,7 +18,7 @@ var (
 	x0, y0, x1, y1                    int
 	conX, conY                        int
 	currentParent                     int
-	currentParentID                   string
+	currentParentID, uploadPath       string
 	currentFolder                     []model.FileFolder
 )
 
@@ -64,7 +64,6 @@ func setTempView(g *gocui.Gui, msg string) error {
 		currentParent = -1
 		currentFolder = nil
 		fmt.Fprintln(v, msg)
-
 		emptyView = v
 		g.SetViewOnTop("empty")
 	}
@@ -73,6 +72,21 @@ func setTempView(g *gocui.Gui, msg string) error {
 }
 
 func setDialogBox(g *gocui.Gui, title string) error {
+	newX := ((conX / 2) + (x0 / 2)) - 11
+	newY := y1 / 2
+	if v, err := g.SetView("dialog", (newX - 1), newY-1, newX+20, newY+1); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		v.Wrap = false
+		v.Autoscroll = false
+		v.Title = title
+		v.Editable = true
+		uploadPath = ""
+		fmt.Fprintln(v, "C:/")
+		dialogView = v
+		SetCurrentViewOnTop(g, "dialog")
+	}
 
 	return nil
 }
@@ -80,6 +94,21 @@ func setDialogBox(g *gocui.Gui, title string) error {
 // PrintScreenView :
 func PrintScreenView(g *gocui.Gui, wg *sync.WaitGroup) {
 	defer wg.Done()
+
+	yErr := g.SetKeybinding("dialog", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error { // 'y' key
+		SetCurrentViewOnTop(g, "screen")
+		if dialogView != nil {
+			g.DeleteView("dialog")
+			dialogView = nil
+		}
+		uploadScreenView(g, uploadPath)
+		return nil
+	})
+
+	if yErr != nil {
+		log.Panicln(yErr)
+	}
+
 	for data := range InScreenChan {
 		if emptyView != nil {
 			g.DeleteView("empty")
@@ -128,10 +157,14 @@ func showScreenView(g *gocui.Gui, data Data) error {
 	case "refresh":
 		return refreshScreenView(g, data)
 	case "upload":
-		return uploadScreenView(g, data.Integer)
+		if dialogView == nil {
+			err := setDialogBox(g, "upload to: ")
+			if err != nil {
+				return err
+			}
+		}
 	case "cancel":
 		return cancelScreenView(g)
-
 	}
 
 	return nil
@@ -154,10 +187,14 @@ func questionScreenView(g *gocui.Gui, data Data) error {
 
 func cancelScreenView(g *gocui.Gui) error {
 	InStatusChan <- Logging("Info", "cancelling operation... ", true)
+	if dialogView != nil {
+		g.DeleteView("dialog")
+		emptyView = nil
+	}
 	return nil
 }
 
-func uploadScreenView(g *gocui.Gui, index int) error {
+func uploadScreenView(g *gocui.Gui, path string) error {
 
 	return nil
 }
@@ -225,7 +262,7 @@ func countDigits(num int) int {
 	return int(math.Floor(math.Log10(float64(num)) + 1))
 }
 
-func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) error {
+func printScreenView(g *gocui.Gui, file []model.FileFolder, parentID string) error {
 	if err := screenView.SetCursor(0, 2); err != nil {
 		return err
 	}
@@ -237,8 +274,8 @@ func printScreenView(g *gocui.Gui, file []model.FileFolder, parentId string) err
 	longestName := 12   // default to 12 spaces
 	biggestFile := 9999 //  the biggest size of a file also defaults to 4 spaces
 
-	InStatusChan <- Logging("Info", "processing "+parentId+"... ", true)
-	currentParentID = parentId
+	InStatusChan <- Logging("Info", "processing "+parentID+"... ", true)
+	currentParentID = parentID
 	for _, f := range file {
 		sizeName = len(f.FullName)
 		if sizeName > longestName {

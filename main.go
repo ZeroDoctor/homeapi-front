@@ -10,8 +10,8 @@ import (
 	"github.com/zerodoctor/homeapi-front/views"
 )
 
-// ?: this is going somewhere later
-func tabComplete(text string, list []string) ([]string, error) {
+// TabComplete : this is going somewhere later
+func TabComplete(text string, list []string) ([]string, error) {
 	var possibles []string
 
 	for _, word := range list {

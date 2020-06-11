@@ -88,6 +88,7 @@ func OpenScreenFile(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
+// DownloadScreenFile :
 func DownloadScreenFile(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		_, cy := v.Cursor()
@@ -99,18 +100,17 @@ func DownloadScreenFile(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func UploadScreenFile (g *gocui.Gui, v *gocui.View) error {
+// UploadScreenFile :
+func UploadScreenFile(g *gocui.Gui, v *gocui.View) error {
 
 	if v != nil {
-		_, cy := v.Cursor()
-		_, oy := v.Origin()
-
-		views.InScreenChan <- views.NewData("upload", cy+oy-2, false, "", nil)
+		views.InScreenChan <- views.NewData("upload", 0, false, "", nil)
 	}
 
 	return nil
 }
 
+// DeleteScreenFile :
 func DeleteScreenFile(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		_, cy := v.Cursor()
