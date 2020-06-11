@@ -2,30 +2,12 @@ package main
 
 import (
 	"log"
-	"regexp"
 	"sync"
 
 	"github.com/jroimartin/gocui"
 	"github.com/zerodoctor/homeapi-front/keys"
 	"github.com/zerodoctor/homeapi-front/views"
 )
-
-// TabComplete : this is going somewhere later
-func TabComplete(text string, list []string) ([]string, error) {
-	var possibles []string
-
-	for _, word := range list {
-		match, err := regexp.MatchString(`(?i)^(`+text+`)`, word)
-		if err != nil {
-			return nil, err
-		}
-		if match {
-			possibles = append(possibles, word)
-		}
-	}
-
-	return possibles, nil
-}
 
 func layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()

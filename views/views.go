@@ -2,6 +2,7 @@ package views
 
 import (
 	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/channel"
 )
 
 var vl *ViewList
@@ -40,9 +41,9 @@ func NextView(g *gocui.Gui, v *gocui.View) error {
 
 // Quit :
 func Quit(g *gocui.Gui, v *gocui.View) error {
-	close(InTreeChan)
-	close(InScreenChan)
-	close(InStatusChan)
+	close(channel.InTreeChan)
+	close(channel.InScreenChan)
+	close(channel.InStatusChan)
 
 	return gocui.ErrQuit
 }

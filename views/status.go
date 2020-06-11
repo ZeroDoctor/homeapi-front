@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/channel"
 )
 
 var statusView *gocui.View
@@ -29,7 +30,7 @@ func SetStatusView(g *gocui.Gui, maxX int, maxY int) error {
 // PrintStatusView :
 func PrintStatusView(g *gocui.Gui, wg *sync.WaitGroup) {
 	defer wg.Done()
-	for data := range InStatusChan {
+	for data := range channel.InStatusChan {
 		if statusView != nil {
 			if data.Boolean {
 				statusView.Clear()
@@ -56,19 +57,19 @@ func PrintStatusView(g *gocui.Gui, wg *sync.WaitGroup) {
 }
 
 // Logging :
-func Logging(ftype string, msg interface{}, clear bool) Data {
+func Logging(ftype string, msg interface{}, clear bool) channel.Data {
 	if ftype == "" {
-		return NewData("", 0, clear, msg, nil)
+		return channel.NewData("", 0, clear, msg, nil)
 	}
 
-	return NewData(ftype, 0, clear, msg, nil)
+	return channel.NewData(ftype, 0, clear, msg, nil)
 }
 
-func questionStatusView(g *gocui.Gui, data Data) {
+func questionStatusView(g *gocui.Gui, data channel.Data) {
 
 	yErr := g.SetKeybinding("status", rune(121), gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error { // 'y' key
 		SetCurrentViewOnTop(g, "screen")
-		InScreenChan <- data
+		channel.InScreenChan <- data
 		return nil
 	})
 
@@ -78,7 +79,7 @@ func questionStatusView(g *gocui.Gui, data Data) {
 
 	nErr := g.SetKeybinding("status", rune(110), gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error { // 'n' key
 		SetCurrentViewOnTop(g, "screen")
-		InScreenChan <- NewData("cancel", 1, false, "", nil)
+		channel.InScreenChan <- channel.NewData("cancel", 1, false, "", nil)
 		return nil
 	})
 

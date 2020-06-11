@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/channel"
 	"github.com/zerodoctor/homeapi-front/consumer"
 	"github.com/zerodoctor/homeapi-front/model"
 )
@@ -36,7 +37,7 @@ func SetTreeView(g *gocui.Gui, maxX int, maxY int) error {
 			return err
 		}
 
-		InTreeChan <- NewData("init", 0, false, "", nil)
+		channel.InTreeChan <- channel.NewData("init", 0, false, "", nil)
 	}
 
 	return nil
@@ -50,27 +51,27 @@ var currentBuffer []model.Label
 // PrintTreeView :
 func PrintTreeView(g *gocui.Gui, wg *sync.WaitGroup) {
 	defer wg.Done()
-	for data := range InTreeChan {
+	for data := range channel.InTreeChan {
 		if treeView != nil {
 			err := showTreeView(g, data)
 			if err != nil {
 				log.Panicln(err)
 			}
-			InStatusChan <- Logging("", "Done!", false)
+			channel.InStatusChan <- Logging("", "Done!", false)
 		}
 	}
 }
 
 // not sure if we need to send Data struct in here
-func showTreeView(g *gocui.Gui, data Data) error {
+func showTreeView(g *gocui.Gui, data channel.Data) error {
 	if len(currentBuffer) <= 0 {
-		InStatusChan <- Logging("Info", "initalizing tree buffer... ", true)
+		channel.InStatusChan <- Logging("Info", "initalizing tree buffer... ", true)
 		currentBuffer = append(currentBuffer, root)
 		printTreeView(g)
 		return nil
 	}
 	if data.Integer >= len(currentBuffer) || data.Integer <= -1 {
-		InStatusChan <- Logging("Error", "index is outside the current tree buffer", true)
+		channel.InStatusChan <- Logging("Error", "index is outside the current tree buffer", true)
 		return nil
 	}
 
@@ -88,7 +89,7 @@ func showTreeView(g *gocui.Gui, data Data) error {
 
 }
 
-func refreshTreeView(g *gocui.Gui, parent model.Label, data Data) error {
+func refreshTreeView(g *gocui.Gui, parent model.Label, data channel.Data) error {
 
 	_, t := getFileData(parent, data)
 	if t != 0 {
@@ -98,26 +99,26 @@ func refreshTreeView(g *gocui.Gui, parent model.Label, data Data) error {
 
 	if data.Type == "refresh" {
 		content := consumer.GetFolderContent(parent.ID)
-		InScreenChan <- NewData("open", data.Integer, false, parent.ID, content)
+		channel.InScreenChan <- channel.NewData("open", data.Integer, false, parent.ID, content)
 	}
 
 	return nil
 }
 
-func getFileData(parent model.Label, data Data) (model.Label, int) {
-	InStatusChan <- Logging("Info", "fecthing "+parent.Name+" children... ", true)
+func getFileData(parent model.Label, data channel.Data) (model.Label, int) {
+	channel.InStatusChan <- Logging("Info", "fecthing "+parent.Name+" children... ", true)
 	//InStatusChan <- Logging("Sending Request: " + (time.Now()).String(), true)
 	err := consumer.CheckFolderContent(parent.ID)
 	//InStatusChan <- Logging("Recevice Response: " + (time.Now()).String(), true)
 	if err != nil {
-		InStatusChan <- Logging("Warning", "couldn't fetch "+parent.ID+" from db ", true)
+		channel.InStatusChan <- Logging("Warning", "couldn't fetch "+parent.ID+" from db ", true)
 		return parent, 1
 	}
 
 	reponse := consumer.GetLabelContent(parent.ID)
 	if len(reponse) <= 0 {
-		InStatusChan <- Logging("Info", parent.ID+" is empty", true)
-		InScreenChan <- NewData("open", data.Integer, false, parent.ID, nil)
+		channel.InStatusChan <- Logging("Info", parent.ID+" is empty", true)
+		channel.InScreenChan <- channel.NewData("open", data.Integer, false, parent.ID, nil)
 		return parent, 1
 	}
 	parent.Children = reponse
@@ -126,12 +127,12 @@ func getFileData(parent model.Label, data Data) (model.Label, int) {
 	return parent, 0
 }
 
-func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
+func openTreeView(g *gocui.Gui, parent model.Label, data channel.Data) error {
 	parent.Open = !parent.Open
 	currentBuffer[data.Integer] = parent
 
 	if parent.Open {
-		InStatusChan <- Logging("Info", "opening "+parent.Name+"... ", true)
+		channel.InStatusChan <- Logging("Info", "opening "+parent.Name+"... ", true)
 		if parent.Children == nil || data.Type == "refresh" {
 			result, t := getFileData(parent, data)
 			if t != 0 {
@@ -141,7 +142,7 @@ func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
 		}
 
 		content := consumer.GetFolderContent(parent.ID)
-		InScreenChan <- NewData("open", data.Integer, false, parent.ID, content)
+		channel.InScreenChan <- channel.NewData("open", data.Integer, false, parent.ID, content)
 
 		count := 0
 		for _, child := range parent.Children {
@@ -156,7 +157,7 @@ func openTreeView(g *gocui.Gui, parent model.Label, data Data) error {
 		printTreeView(g)
 		updateScreenView(g, parent.Name)
 	} else {
-		InStatusChan <- Logging("Info", "closing "+parent.Name+"... ", true)
+		channel.InStatusChan <- Logging("Info", "closing "+parent.Name+"... ", true)
 
 		total := 0
 		parent.Index = data.Integer

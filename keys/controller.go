@@ -2,6 +2,7 @@ package keys
 
 import (
 	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/channel"
 	"github.com/zerodoctor/homeapi-front/views"
 )
 
@@ -62,7 +63,7 @@ func InitTree(g *gocui.Gui, v *gocui.View) error {
 			return err
 		}
 
-		views.InTreeChan <- views.NewData("init", 0, false, "", nil)
+		channel.InTreeChan <- channel.NewData("init", 0, false, "", nil)
 	}
 	return nil
 }
@@ -72,7 +73,7 @@ func OpenTreeFile(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		_, cy := v.Cursor()
 		_, oy := v.Origin()
-		views.InTreeChan <- views.NewData("open", cy+oy, false, "", nil)
+		channel.InTreeChan <- channel.NewData("open", cy+oy, false, "", nil)
 	}
 	return nil
 }
@@ -82,7 +83,7 @@ func OpenScreenFile(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 		_, cy := v.Cursor()
 		_, oy := v.Origin()
-		views.InScreenChan <- views.NewData("view", cy+oy-2, false, "", nil)
+		channel.InScreenChan <- channel.NewData("view", cy+oy-2, false, "", nil)
 	}
 
 	return nil
@@ -94,7 +95,7 @@ func DownloadScreenFile(g *gocui.Gui, v *gocui.View) error {
 		_, cy := v.Cursor()
 		_, oy := v.Origin()
 
-		views.InScreenChan <- views.NewData("download", cy+oy-2, false, "", nil)
+		channel.InScreenChan <- channel.NewData("download", cy+oy-2, false, "", nil)
 	}
 
 	return nil
@@ -104,7 +105,7 @@ func DownloadScreenFile(g *gocui.Gui, v *gocui.View) error {
 func UploadScreenFile(g *gocui.Gui, v *gocui.View) error {
 
 	if v != nil {
-		views.InScreenChan <- views.NewData("upload", 0, false, "", nil)
+		channel.InScreenChan <- channel.NewData("upload", 0, false, "", nil)
 	}
 
 	return nil
@@ -116,7 +117,7 @@ func DeleteScreenFile(g *gocui.Gui, v *gocui.View) error {
 		_, cy := v.Cursor()
 		_, oy := v.Origin()
 
-		views.InScreenChan <- views.NewData("question", cy+oy-2, false, "delete", nil)
+		channel.InScreenChan <- channel.NewData("question", cy+oy-2, false, "delete", nil)
 	}
 
 	return nil

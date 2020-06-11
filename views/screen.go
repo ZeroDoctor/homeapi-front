@@ -9,8 +9,10 @@ import (
 	"sync"
 
 	"github.com/jroimartin/gocui"
+	"github.com/zerodoctor/homeapi-front/channel"
 	"github.com/zerodoctor/homeapi-front/consumer"
 	"github.com/zerodoctor/homeapi-front/model"
+	"github.com/zerodoctor/homeapi-front/views/ui"
 )
 
 var (
@@ -50,66 +52,13 @@ func SetScreenView(g *gocui.Gui, maxX int, maxY int) error {
 	return nil
 }
 
-// setTempView :
-func setTempView(g *gocui.Gui, msg string) error {
-	newX := ((conX / 2) + (x0 / 2)) - 11
-	newY := y1 / 2
-	if v, err := g.SetView("empty", (newX - 1), newY-1, newX+20, newY+1); err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
-		screenView.Clear()
-		v.Wrap = true
-		v.Autoscroll = false
-		currentParent = -1
-		currentFolder = nil
-		fmt.Fprintln(v, msg)
-		emptyView = v
-		g.SetViewOnTop("empty")
-	}
-
-	return nil
-}
-
-func setDialogBox(g *gocui.Gui, title string) error {
-	newX := ((conX / 2) + (x0 / 2)) - 11
-	newY := y1 / 2
-	if v, err := g.SetView("dialog", (newX - 1), newY-1, newX+20, newY+1); err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
-		v.Wrap = false
-		v.Autoscroll = false
-		v.Title = title
-		v.Editable = true
-		uploadPath = ""
-		fmt.Fprintln(v, "C:/")
-		dialogView = v
-		SetCurrentViewOnTop(g, "dialog")
-	}
-
-	return nil
-}
-
 // PrintScreenView :
 func PrintScreenView(g *gocui.Gui, wg *sync.WaitGroup) {
 	defer wg.Done()
 
-	yErr := g.SetKeybinding("dialog", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error { // 'y' key
-		SetCurrentViewOnTop(g, "screen")
-		if dialogView != nil {
-			g.DeleteView("dialog")
-			dialogView = nil
-		}
-		uploadScreenView(g, uploadPath)
-		return nil
-	})
+	setInputKeybind(g)
 
-	if yErr != nil {
-		log.Panicln(yErr)
-	}
-
-	for data := range InScreenChan {
+	for data := range channel.InScreenChan {
 		if emptyView != nil {
 			g.DeleteView("empty")
 			emptyView = nil
@@ -119,20 +68,22 @@ func PrintScreenView(g *gocui.Gui, wg *sync.WaitGroup) {
 			if err != nil {
 				log.Panicln(err)
 			}
-			InStatusChan <- Logging("", "Done!", false)
+			channel.InStatusChan <- Logging("", "Done!", false)
 		}
 	}
 }
 
-func showScreenView(g *gocui.Gui, data Data) error {
+func showScreenView(g *gocui.Gui, data channel.Data) error {
 	if data.Type == "open" {
 		if data.File == nil || len(data.File) <= 0 {
-			err := setTempView(g, "this folder is empty")
+			err := ui.SetInfoView(g, screenView, emptyView, "this folder is empty", conX, x0, y1)
+			currentParent = -1
+			currentFolder = nil
 			if err != nil {
 				return err
 			}
 
-			InStatusChan <- Logging("Info", "this folder is empty... ", true)
+			channel.InStatusChan <- Logging("Info", "this folder is empty... ", true)
 
 			return nil
 		}
@@ -141,7 +92,7 @@ func showScreenView(g *gocui.Gui, data Data) error {
 	}
 
 	if data.Integer < 0 || data.Integer >= (len(currentFolder)+1) {
-		InStatusChan <- Logging("Error", "index out of bounds "+strconv.Itoa(data.Integer)+"... ", true)
+		channel.InStatusChan <- Logging("Error", "index out of bounds "+strconv.Itoa(data.Integer)+"... ", true)
 		return nil
 	}
 
@@ -158,10 +109,11 @@ func showScreenView(g *gocui.Gui, data Data) error {
 		return refreshScreenView(g, data)
 	case "upload":
 		if dialogView == nil {
-			err := setDialogBox(g, "upload to: ")
+			err := ui.SetInputBox(g, dialogView, "upload to: ", conX, x0, y1)
 			if err != nil {
 				return err
 			}
+			SetCurrentViewOnTop(g, "dialog")
 		}
 	case "cancel":
 		return cancelScreenView(g)
@@ -170,13 +122,29 @@ func showScreenView(g *gocui.Gui, data Data) error {
 	return nil
 }
 
+func setInputKeybind(g *gocui.Gui) {
+	err := g.SetKeybinding("dialog", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
+		SetCurrentViewOnTop(g, "screen")
+		if dialogView != nil {
+			g.DeleteView("dialog")
+			dialogView = nil
+		}
+		uploadScreenView(g, uploadPath)
+		return nil
+	})
+
+	if err != nil {
+		log.Panicln(err)
+	}
+}
+
 // the reason why this is here and not in status.go because of the currentFolder var
 // status.go can access the var but I like private vars to be accessed in one file instead of the whole folder
-func questionScreenView(g *gocui.Gui, data Data) error {
+func questionScreenView(g *gocui.Gui, data channel.Data) error {
 	file := currentFolder[data.Integer]
 
 	SetCurrentViewOnTop(g, "status")
-	InStatusChan <- NewData(
+	channel.InStatusChan <- channel.NewData(
 		data.String.(string), data.Integer, true,
 		"are you sure you want to "+data.String.(string)+" "+file.FullName+" (y/n) ",
 		nil,
@@ -186,10 +154,10 @@ func questionScreenView(g *gocui.Gui, data Data) error {
 }
 
 func cancelScreenView(g *gocui.Gui) error {
-	InStatusChan <- Logging("Info", "cancelling operation... ", true)
+	channel.InStatusChan <- Logging("Info", "cancelling operation... ", true)
 	if dialogView != nil {
 		g.DeleteView("dialog")
-		emptyView = nil
+		dialogView = nil
 	}
 	return nil
 }
@@ -202,33 +170,33 @@ func uploadScreenView(g *gocui.Gui, path string) error {
 func deleteScreenView(g *gocui.Gui, index int) error {
 	file := currentFolder[index]
 
-	InStatusChan <- Logging("Info", "deleting "+file.FullName+"... ", true)
+	channel.InStatusChan <- Logging("Info", "deleting "+file.FullName+"... ", true)
 	result, err := consumer.DeleteFolder(file)
 	if err != nil {
 		return err
 	}
-	InStatusChan <- Logging("Info", result+" ", true)
-	InTreeChan <- NewData("refresh", currentParent, false, "", nil)
+	channel.InStatusChan <- Logging("Info", result+" ", true)
+	channel.InTreeChan <- channel.NewData("refresh", currentParent, false, "", nil)
 
 	return nil
 }
 
-func refreshScreenView(g *gocui.Gui, data Data) error {
+func refreshScreenView(g *gocui.Gui, data channel.Data) error {
 	return nil
 }
 
 func downloadScreenView(g *gocui.Gui, index int) error {
 	file := currentFolder[index]
 
-	InStatusChan <- Logging("Info", "processing download "+file.ID+"...", true)
+	channel.InStatusChan <- Logging("Info", "processing download "+file.ID+"...", true)
 	path, err := consumer.DownloadFolder(file)
 	if err != "" {
-		InStatusChan <- Logging("Warning", "Something went wrong my guy "+err, true)
+		channel.InStatusChan <- Logging("Warning", "Something went wrong my guy "+err, true)
 		return nil
 	}
-	InStatusChan <- Logging("Info", "the file "+file.FullName+" has been downloaded to "+path+" ", true)
+	channel.InStatusChan <- Logging("Info", "the file "+file.FullName+" has been downloaded to "+path+" ", true)
 	if file.Dir == 1 {
-		InTreeChan <- NewData("refresh", currentParent, false, "", nil) // a zip file has been created so lets refresh parent
+		channel.InTreeChan <- channel.NewData("refresh", currentParent, false, "", nil) // a zip file has been created so lets refresh parent
 	}
 
 	return nil
@@ -237,16 +205,16 @@ func downloadScreenView(g *gocui.Gui, index int) error {
 func openScreenView(g *gocui.Gui, index int) error {
 	if currentFolder[index].Dir == 1 {
 		// InStatusChan <- Logging("Info", "processing " + strconv.Itoa(currentParent + index) + "... " , true)
-		InTreeChan <- NewData("open", currentParent+index, false, "", nil)
+		channel.InTreeChan <- channel.NewData("open", currentParent+index, false, "", nil)
 	}
 
-	InStatusChan <- Logging("Info", "can't open a file yet ", true)
+	channel.InStatusChan <- Logging("Info", "can't open a file yet ", true)
 	return nil
 }
 
 func repeatString(buffer *bytes.Buffer, str string, count int) {
 	if count < 0 {
-		InStatusChan <- Logging("Error", "count is too long ", true)
+		channel.InStatusChan <- Logging("Error", "count is too long ", true)
 		return
 	}
 
@@ -274,7 +242,7 @@ func printScreenView(g *gocui.Gui, file []model.FileFolder, parentID string) err
 	longestName := 12   // default to 12 spaces
 	biggestFile := 9999 //  the biggest size of a file also defaults to 4 spaces
 
-	InStatusChan <- Logging("Info", "processing "+parentID+"... ", true)
+	channel.InStatusChan <- Logging("Info", "processing "+parentID+"... ", true)
 	currentParentID = parentID
 	for _, f := range file {
 		sizeName = len(f.FullName)
