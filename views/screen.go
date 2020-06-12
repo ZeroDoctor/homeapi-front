@@ -16,12 +16,12 @@ import (
 )
 
 var (
-	screenView, emptyView, dialogView *gocui.View
-	x0, y0, x1, y1                    int
-	conX, conY                        int
-	currentParent                     int
-	currentParentID, uploadPath       string
-	currentFolder                     []model.FileFolder
+	screenView, emptyView, inputView *gocui.View
+	x0, y0, x1, y1                   int
+	conX, conY                       int
+	currentParent                    int
+	currentParentID, uploadPath      string
+	currentFolder                    []model.FileFolder
 )
 
 // SetScreenView :
@@ -108,11 +108,12 @@ func showScreenView(g *gocui.Gui, data channel.Data) error {
 	case "refresh":
 		return refreshScreenView(g, data)
 	case "upload":
-		if dialogView == nil {
-			err := ui.SetInputBox(g, dialogView, "upload to: ", conX, x0, y1)
+		if inputView == nil {
+			view, err := ui.SetInputBox(g, "upload to: "+currentParentID, conX, x0, x1, y1)
 			if err != nil {
 				return err
 			}
+			inputView = view
 			SetCurrentViewOnTop(g, "dialog")
 		}
 	case "cancel":
@@ -125,11 +126,14 @@ func showScreenView(g *gocui.Gui, data channel.Data) error {
 func setInputKeybind(g *gocui.Gui) {
 	err := g.SetKeybinding("dialog", gocui.KeyEnter, gocui.ModNone, func(g *gocui.Gui, v *gocui.View) error {
 		SetCurrentViewOnTop(g, "screen")
-		if dialogView != nil {
+		if inputView != nil {
 			g.DeleteView("dialog")
-			dialogView = nil
+			inputView = nil
 		}
-		uploadScreenView(g, uploadPath)
+		if ui.InputBox.Str != nil {
+			uploadScreenView(g, string(ui.InputBox.Str))
+		}
+
 		return nil
 	})
 
@@ -155,14 +159,16 @@ func questionScreenView(g *gocui.Gui, data channel.Data) error {
 
 func cancelScreenView(g *gocui.Gui) error {
 	channel.InStatusChan <- Logging("Info", "cancelling operation... ", true)
-	if dialogView != nil {
+	if inputView != nil {
 		g.DeleteView("dialog")
-		dialogView = nil
+		inputView = nil
+		SetCurrentViewOnTop(g, "screen")
 	}
 	return nil
 }
 
 func uploadScreenView(g *gocui.Gui, path string) error {
+	channel.InStatusChan <- Logging("Check", "path is "+path, true)
 
 	return nil
 }

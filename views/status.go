@@ -20,7 +20,6 @@ func SetStatusView(g *gocui.Gui, maxX int, maxY int) error {
 		}
 		v.Title = "status"
 		v.Wrap = false
-
 		statusView = v
 	}
 
@@ -46,8 +45,11 @@ func PrintStatusView(g *gocui.Gui, wg *sync.WaitGroup) {
 			case "Warning":
 				header = "\x1b[1;30;43mWarning\x1b[0;37;40m : "
 			case "delete": // move would also be in this case
-				header = "\x1b[1;30;43m" + data.Type + "\x1b[0;37;40m : "
+				header = "\x1b[1;30;43mDelete\x1b[0;37;40m : "
 				questionStatusView(g, data)
+			case "":
+			default: // move would also be in this case
+				header = "\x1b[1;30;43m" + data.Type + "\x1b[0;37;40m : "
 			}
 
 			fmt.Fprint(statusView, header)

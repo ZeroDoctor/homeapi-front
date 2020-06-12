@@ -3,7 +3,6 @@ package keys
 import (
 	"github.com/jroimartin/gocui"
 	"github.com/zerodoctor/homeapi-front/channel"
-	"github.com/zerodoctor/homeapi-front/views"
 )
 
 // CursorUp :
@@ -47,23 +46,6 @@ func CursorLeft(g *gocui.Gui, v *gocui.View) error {
 func CursorRight(g *gocui.Gui, v *gocui.View) error {
 	if v != nil {
 
-	}
-	return nil
-}
-
-// InitTree :
-func InitTree(g *gocui.Gui, v *gocui.View) error {
-	if v != nil {
-		_, err := g.View("tree")
-		if err != nil {
-			return err
-		}
-
-		if _, err := views.SetCurrentViewOnTop(g, "tree"); err != nil {
-			return err
-		}
-
-		channel.InTreeChan <- channel.NewData("init", 0, false, "", nil)
 	}
 	return nil
 }

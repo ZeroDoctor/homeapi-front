@@ -45,13 +45,10 @@ func SetGeneralBindings(g *gocui.Gui) {
 	if err := g.SetKeybinding("screen", gocui.KeyTab, gocui.ModNone, views.NextView); err != nil {
 		log.Panicln(err)
 	}
-	if err := g.SetKeybinding("status", gocui.KeyEnter, gocui.ModNone, InitTree); err != nil {
-		log.Panicln(err)
-	}
 
 	up := NewKey(rune(107), CursorUp)
 	down := NewKey(rune(106), CursorDown)
-	
+
 	openTree := NewKey(rune(111), OpenTreeFile)
 
 	openScreen := NewKey(rune(111), OpenScreenFile)
